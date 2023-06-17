@@ -1,0 +1,247 @@
+syntax = "proto3";
+
+package ibc.core.vibc.v1;
+
+option go_package = "github.com/cosmos/ibc-go/v7/modules/core/vibc/types";
+
+import "gogoproto/gogo.proto";
+import "ibc/core/client/v1/client.proto";
+import "ibc/core/channel/v1/channel.proto";
+import "ibc/core/commitment/v1/commitment.proto";
+
+// VirtualIBCChain defines the vIBC Chain service. This what the chain or execution side of the vIBC protocol implements.
+service VirtualIBCChain {
+  // The chain side implements channel handshake callbacks as these are propagated async to 
+  // the IBC enabled smart contract or module there. One difference is that the chain can be passive
+  // or active in handshake initialization.
+
+  // OnChanOpenInit defines a rpc handler method for MsgOnChanOpenInit.
+  // Proofs:
+  // - exists: channel sequence for channel_id
+  // - non-exists: channel<INIT>
+  rpc OnChanOpenInit(MsgOnChanOpenInit) returns (MsgOnChanOpenInitResponse);
+
+  // OnChanOpenTry defines a rpc handler method for MsgOnChanOpenTry.
+  // Proofs:
+  // - exists: channel sequence for channel_id
+  // - non-exists: channel<TRYOPEN>
+  rpc OnChanOpenTry(MsgOnChanOpenTry) returns (MsgOnChanOpenTryResponse);
+
+  // OnChanOpenAck defines a rpc handler method for MsgOnChanOpenAck.
+  // Proofs:
+  // - exists: channel<INIT>
+  // - non-exists: channel<OPEN>
+  rpc OnChanOpenAck(MsgOnChanOpenAck) returns (MsgOnChanOpenAckResponse);
+
+  // OnChanOpenConfirm defines a rpc handler method for MsgOnChanOpenConfirm.
+  // Proofs:
+  // - exists: channel<TRYOPEN>
+  // - non-exists: channel<OPEN>
+  rpc OnChanOpenConfirm(MsgOnChanOpenConfirm) returns (MsgOnChanOpenConfirmResponse);
+
+  // The chain side implements packet lifecyle callbacks.
+
+  // OnRecvPacket defines a rpc handler method for MsgOnRecvPacket.
+  // Proofs:
+  // - exists: packet commitment
+  // - exists: packet receipt OR packet recv sequence
+  rpc OnRecvPacket(MsgOnRecvPacket) returns (MsgOnRecvPacketResponse);
+
+  // OnAcknowledgementPacket defines a rpc handler method for MsgOnAcknowledgementPacket.
+  rpc OnAcknowledgementPacket(MsgOnAcknowledgementPacket) returns (MsgOnAcknowledgementPacketResponse);
+
+  // OnTimeoutPacket defines a rpc handler method for MsgOnTimeoutPacket.
+  rpc OnTimeoutPacket(MsgOnTimeoutPacket) returns (MsgOnTimeoutPacketResponse);
+}
+
+// VirtualIBCSidecar defines the vIBC Sidecar service. This what the networking side of the vIBC protocol implements.
+service VirtualIBCSidecar {
+  // In the default case, the chain side is passive in the channel handshake process.
+  // vIBC differs from IBC in that it allows the chain side to actively initiate the channel handshake.
+  // ChannelOpenInit defines a rpc handler method for MsgChannelOpenInit originating from the chain side.
+  rpc ChannelOpenInit(MsgChannelOpenInit) returns (MsgChannelOpenInitResponse);
+
+  // The chain is also active in the initiation of the packet lifecycle.
+  // SendPacket defines a rpc handler method for MsgSendPacket.
+  rpc SendPacket(MsgSendPacket) returns (MsgSendPacketResponse);
+}
+
+// ResponseResultType defines the possible outcomes of the execution of a message
+enum ResponseResultType {
+  option (gogoproto.goproto_enum_prefix) = false;
+
+  // Default zero value enumeration
+  RESPONSE_RESULT_TYPE_UNSPECIFIED = 0 [(gogoproto.enumvalue_customname) = "UNSPECIFIED"];
+  // The message did not call the IBC application callbacks (because, for example, the packet had already been relayed)
+  RESPONSE_RESULT_TYPE_NOOP = 1 [(gogoproto.enumvalue_customname) = "NOOP"];
+  // The message was executed successfully
+  RESPONSE_RESULT_TYPE_SUCCESS = 2 [(gogoproto.enumvalue_customname) = "SUCCESS"];
+  // The message was executed with an error
+  RESPONSE_RESULT_TYPE_ERROR = 3 [(gogoproto.enumvalue_customname) = "ERROR"];
+}
+
+// MsgSendPacket defines an sdk.Msg to send a packet. 
+// It is initiated by the vIBC chain side. 
+message MsgSendPacket {
+  option (gogoproto.equal)           = false;
+  option (gogoproto.goproto_getters) = false;
+
+  string  source_port_id = 1 [(gogoproto.moretags) = "yaml:\"source_port_id\""];
+  string  source_channel_id = 2 [(gogoproto.moretags) = "yaml:\"source_channel_id\""];
+  ibc.core.channel.v1.Channel channel = 3 [(gogoproto.nullable) = false];
+}
+
+// MsgSendPacketResponse defines an sdk.Msg for a send packet response. 
+// It is returned by the vIBC sidecar side. 
+message MsgSendPacketResponse {
+  option (gogoproto.goproto_getters) = false;
+
+  ResponseResultType result = 1;
+  uint64 sequence = 2 [(gogoproto.moretags) = "yaml:\"sequence\""];
+}
+
+// MsgChannelOpenInit defines an sdk.Msg to initialize a channel handshake. 
+// It originates from the vIBC chain side.
+message MsgChannelOpenInit {
+  option (gogoproto.equal)           = false;
+  option (gogoproto.goproto_getters) = false;
+
+  string  port_id = 1 [(gogoproto.moretags) = "yaml:\"port_id\""];
+  ibc.core.channel.v1.Channel channel = 2 [(gogoproto.nullable) = false];
+}
+
+// MsgChannelOpenInitResponse defines the Msg/ChannelOpenInit response type.
+message MsgChannelOpenInitResponse {
+  string channel_id = 1 [(gogoproto.moretags) = "yaml:\"channel_id\""];
+  string version    = 2;
+}
+
+// MsgOnChanOpenInit defines an sdk.Msg to for a channel init callback.
+// It originates from the vIBC sidecar side.
+message MsgOnChanOpenInit {
+  option (gogoproto.equal)           = false;
+  option (gogoproto.goproto_getters) = false;
+
+  repeated string                  connection_hops = 1 [(gogoproto.moretags) = "yaml:\"connection_hops\""];
+  ibc.core.channel.v1.Order        ordering = 2;
+  ibc.core.channel.v1.Counterparty party = 3 [(gogoproto.nullable) = false];
+  ibc.core.channel.v1.Counterparty counterparty = 4 [(gogoproto.nullable) = false];
+  string                           party_version = 5 [(gogoproto.moretags) = "yaml:\"party_version\""];
+}
+
+// MsgOnChanOpenInitResponse defines the Msg/OnChanOpenInit response type.
+message MsgOnChanOpenInitResponse {
+  option (gogoproto.goproto_getters) = false;
+
+  ResponseResultType result = 1;
+  string             version    = 2;
+}
+
+// MsgOnChanOpenTry defines an sdk.Msg to for a channel open try callback.
+// It originates from the vIBC sidecar side.
+message MsgOnChanOpenTry {
+  option (gogoproto.equal)           = false;
+  option (gogoproto.goproto_getters) = false;
+
+  repeated string                  connection_hops = 1 [(gogoproto.moretags) = "yaml:\"connection_hops\""];
+  ibc.core.channel.v1.Order        ordering = 2;
+  ibc.core.channel.v1.Counterparty party = 3 [(gogoproto.nullable) = false];
+  ibc.core.channel.v1.Counterparty counterparty = 4 [(gogoproto.nullable) = false];
+  string                           counterparty_version = 5 [(gogoproto.moretags) = "yaml:\"counterparty_version\""];
+}
+
+// MsgOnChanOpenTryResponse defines the Msg/OnChanOpenTry response type.
+message MsgOnChanOpenTryResponse {
+  option (gogoproto.goproto_getters) = false;
+
+  ResponseResultType result = 1;
+  string             version    = 2;
+}
+
+// MsgOnChanOpenAck defines an sdk.Msg to for a channel open ack callback.
+// It originates from the vIBC sidecar side.
+message MsgOnChanOpenAck {
+  option (gogoproto.equal)           = false;
+  option (gogoproto.goproto_getters) = false;
+
+  string                    port_id                 = 1 [(gogoproto.moretags) = "yaml:\"port_id\""];
+  string                    channel_id              = 2 [(gogoproto.moretags) = "yaml:\"channel_id\""];
+  string                    counterparty_channel_id = 3 [(gogoproto.moretags) = "yaml:\"counterparty_channel_id\""];
+  string                    counterparty_version    = 4 [(gogoproto.moretags) = "yaml:\"counterparty_version\""];
+}
+
+// MsgOnChanOpenAckResponse defines the Msg/OnChanOpenAck response type.
+message MsgOnChanOpenAckResponse {
+  option (gogoproto.goproto_getters) = false;
+
+  ResponseResultType result = 1;
+}
+
+// MsgOnChanOpenConfirm defines an sdk.Msg to for a channel open Confirm callbConfirm.
+// It originates from the vIBC sidecar side.
+message MsgOnChanOpenConfirm {
+  option (gogoproto.equal)           = false;
+  option (gogoproto.goproto_getters) = false;
+
+  string                    port_id                 = 1 [(gogoproto.moretags) = "yaml:\"port_id\""];
+  string                    channel_id              = 2 [(gogoproto.moretags) = "yaml:\"channel_id\""];
+}
+
+// MsgOnChanOpenConfirmResponse defines the Msg/OnChanOpenConfirm response type.
+message MsgOnChanOpenConfirmResponse {
+  option (gogoproto.goproto_getters) = false;
+
+  ResponseResultType result = 1;
+}
+
+// MsgOnRecvPacket defines an sdk.Msg to for a packet receipt.
+// It originates from the vIBC sidecar side.
+message MsgOnRecvPacket {
+  option (gogoproto.equal)           = false;
+  option (gogoproto.goproto_getters) = false;
+
+  ibc.core.channel.v1.Packet packet  = 1 [(gogoproto.nullable) = false];
+  string                     relayer = 2;
+}
+
+// MsgOnRecvPacketResponse defines the Msg/OnRecvPacket response type.
+message MsgOnRecvPacketResponse {
+  option (gogoproto.goproto_getters) = false;
+
+  ibc.core.channel.v1.Acknowledgement acknowledgement = 1;
+}
+
+// MsgOnTimeoutPacket defines an sdk.Msg to for a packet receipt.
+// It originates from the vIBC sidecar side.
+message MsgOnTimeoutPacket {
+  option (gogoproto.equal)           = false;
+  option (gogoproto.goproto_getters) = false;
+
+  ibc.core.channel.v1.Packet packet  = 1 [(gogoproto.nullable) = false];
+  string                     relayer = 2;
+}
+
+// MsgOnTimeoutPacketResponse defines the Msg/OnTimeoutPacket response type.
+message MsgOnTimeoutPacketResponse {
+  option (gogoproto.goproto_getters) = false;
+
+  ResponseResultType result = 1;
+}
+
+// MsgOnAcknowledgementPacket defines an sdk.Msg to for a packet acknowledgement.
+// It originates from the vIBC sidecar side.
+message MsgOnAcknowledgementPacket {
+  option (gogoproto.equal)           = false;
+  option (gogoproto.goproto_getters) = false;
+
+  ibc.core.channel.v1.Packet packet          = 1 [(gogoproto.nullable) = false];
+  bytes                      acknowledgement = 2;
+  string                    relayer = 3;
+}
+
+// MsgOnAcknowledgementPacketResponse defines the Msg/OnAcknowledgementPacket response type.
+message MsgOnAcknowledgementPacketResponse {
+  option (gogoproto.goproto_getters) = false;
+
+  ResponseResultType result = 1;
+}
