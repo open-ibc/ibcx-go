@@ -61,9 +61,33 @@ service VirtualIBCSidecar {
   // ChannelOpenInit defines a rpc handler method for MsgChannelOpenInit originating from the chain side.
   rpc ChannelOpenInit(MsgChannelOpenInit) returns (MsgChannelOpenInitResponse);
 
+  // WriteOpenInitChan defines a rpc handler method for MsgWriteOpenInitChan.
+  rpc WriteOpenInitChan(MsgWriteOpenInitChan) returns (MsgWriteOpenInitChan);
+
+  // WriteOpenTryChan defines a rpc handler method for MsgWriteOpenTryChan.
+  rpc WriteOpenTryChan(MsgWriteOpenTryChan) returns (MsgWriteOpenTryChan);
+
+  // WriteOpenAckChan defines a rpc handler method for MsgWriteOpenAckChan.
+  rpc WriteOpenAckChan(MsgWriteOpenAckChan) returns (MsgWriteOpenAckChan);
+
+  // WriteOpenConfirmChan defines a rpc handler method for MsgWriteOpenConfirmChan.
+  rpc WriteOpenConfirmChan(MsgWriteOpenConfirmChan) returns (MsgWriteOpenConfirmChan);
+
   // The chain is also active in the initiation of the packet lifecycle.
   // SendPacket defines a rpc handler method for MsgSendPacket.
   rpc SendPacket(MsgSendPacket) returns (MsgSendPacketResponse);
+
+  // WritePacketAck defines a rpc handler method for MsgWritePacketAck.
+  // This completes the RecvPacket flow.
+  rpc WritePacketAck(MsgWritePacketAck) returns (MsgWritePacketAckResponse);
+
+  // EmitAckPacketEvent defines a rpc handler method for MsgEmitAckPacketEvent.
+  // This completes the Acknowledgement flow.
+  rpc EmitAckPacketEvent(MsgEmitAckPacketEvent) returns (MsgEmitAckPacketEventResponse);
+
+  // EmitTimeoutPacketEvent defines a rpc handler method for MsgEmitTimeoutPacketEvent.
+  // This completes the Acknowledgement flow.
+  rpc EmitTimeoutPacketEvent(MsgEmitTimeoutPacketEvent) returns (MsgEmitTimeoutPacketEventResponse);
 }
 
 // ResponseResultType defines the possible outcomes of the execution of a message
@@ -135,6 +159,19 @@ message MsgOnChanOpenInitResponse {
 
   ResponseResultType result = 1;
   string             version    = 2;
+}
+
+// MsgWriteOpenInitChan defines an sdk.Msg for the completion of INIT channel.
+// It originates from the vIBC chain side.
+message MsgWriteOpenInitChan {
+  option (gogoproto.equal)           = false;
+  option (gogoproto.goproto_getters) = false;
+
+  repeated string                  connection_hops = 1 [(gogoproto.moretags) = "yaml:\"connection_hops\""];
+  ibc.core.channel.v1.Order        ordering = 2;
+  ibc.core.channel.v1.Counterparty party = 3 [(gogoproto.nullable) = false];
+  ibc.core.channel.v1.Counterparty counterparty = 4 [(gogoproto.nullable) = false];
+  string                           party_version = 5 [(gogoproto.moretags) = "yaml:\"party_version\""];
 }
 
 // MsgOnChanOpenTry defines an sdk.Msg to for a channel open try callback.
