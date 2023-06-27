@@ -3,17 +3,20 @@ package keeper
 import (
 	"context"
 
+	metrics "github.com/armon/go-metrics"
+	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
 	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
 	host "github.com/cosmos/ibc-go/v7/modules/core/24-host"
+	coretypes "github.com/cosmos/ibc-go/v7/modules/core/types"
 	vibctypes "github.com/cosmos/ibc-go/v7/modules/core/vibc/types"
 )
 
 var _ vibctypes.VirtualIBCSidecarServer = Keeper{}
 
-func (k Keeper) WriteOpenInitOrTryChan(goCtx context.Context, msg *vibctypes.MsgWriteOpenInitOrTryChan) (*vibctypes.MsgWriteOpenInitOrTryChanResponse, error) {
+func (k Keeper) PostChannelOpenInitOrTry(goCtx context.Context, msg *vibctypes.MsgPostChannelOpenInitOrTry) (*vibctypes.MsgPostChannelOpenInitOrTryResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// check following:
@@ -37,15 +40,19 @@ func (k Keeper) WriteOpenInitOrTryChan(goCtx context.Context, msg *vibctypes.Msg
 		k.ChannelKeeper.WriteOpenInitChannel(ctx, msg.PortId, msg.ChannelId, msg.Channel.Ordering, msg.Channel.ConnectionHops,
 			msg.Channel.Counterparty, msg.Channel.Version)
 	case channeltypes.TRYOPEN:
+		// TODO: Verify INIT channel on counterparty
 		k.ChannelKeeper.WriteOpenTryChannel(ctx, msg.PortId, msg.ChannelId, msg.Channel.Ordering, msg.Channel.ConnectionHops,
 			msg.Channel.Counterparty, msg.Channel.Version)
 	default:
 		return nil, sdkerrors.Wrap(channeltypes.ErrInvalidChannelState, "expecting INIT or TRYOPEN")
 	}
-	return &vibctypes.MsgWriteOpenInitOrTryChanResponse{}, nil
+
+	ctx.Logger().Info("post channel open init or try callback succeeded", "channel-id", msg.ChannelId, "port-id", msg.PortId, "version", msg.Channel.Version)
+
+	return &vibctypes.MsgPostChannelOpenInitOrTryResponse{}, nil
 }
 
-func (k Keeper) WriteOpenAckChan(goCtx context.Context, msg *vibctypes.MsgWriteOpenAckChan) (*vibctypes.MsgWriteOpenAckChanResponse, error) {
+func (k Keeper) PostChannelOpenAck(goCtx context.Context, msg *vibctypes.MsgPostChannelOpenAck) (*vibctypes.MsgPostChannelOpenAckResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// check following:
@@ -59,10 +66,13 @@ func (k Keeper) WriteOpenAckChan(goCtx context.Context, msg *vibctypes.MsgWriteO
 	}
 	// TODO: Verify channel TRYOPEN on counterparty.
 	k.ChannelKeeper.WriteOpenAckChannel(ctx, msg.PortId, msg.ChannelId, msg.CounterpartyVersion, msg.CounterpartyChannelId)
-	return &vibctypes.MsgWriteOpenAckChanResponse{}, nil
+
+	ctx.Logger().Info("post channel open ack callback succeeded", "channel-id", msg.ChannelId, "port-id", msg.PortId)
+
+	return &vibctypes.MsgPostChannelOpenAckResponse{}, nil
 }
 
-func (k Keeper) WriteOpenConfirmChan(goCtx context.Context, msg *vibctypes.MsgWriteOpenConfirmChan) (*vibctypes.MsgWriteOpenConfirmChanResponse, error) {
+func (k Keeper) PostChannelOpenConfirm(goCtx context.Context, msg *vibctypes.MsgPostChannelOpenConfirm) (*vibctypes.MsgPostChannelOpenConfirmResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// check following:
@@ -76,7 +86,10 @@ func (k Keeper) WriteOpenConfirmChan(goCtx context.Context, msg *vibctypes.MsgWr
 	}
 	// TODO: Verify channel OPEN on counterparty.
 	k.ChannelKeeper.WriteOpenConfirmChannel(ctx, msg.PortId, msg.ChannelId)
-	return nil, nil
+
+	ctx.Logger().Info("post channel open confirm callback succeeded", "channel-id", msg.ChannelId, "port-id", msg.PortId)
+
+	return &vibctypes.MsgPostChannelOpenConfirmResponse{}, nil
 }
 
 func (k Keeper) SendPacket(goCtx context.Context, msg *vibctypes.MsgSendPacket) (*vibctypes.MsgSendPacketResponse, error) {
@@ -97,7 +110,7 @@ func (k Keeper) SendPacket(goCtx context.Context, msg *vibctypes.MsgSendPacket) 
 	}, nil
 }
 
-func (k Keeper) WritePacketAck(goCtx context.Context, msg *vibctypes.MsgWritePacketAck) (*vibctypes.MsgWritePacketAckResponse, error) {
+func (k Keeper) PostRecvPacket(goCtx context.Context, msg *vibctypes.MsgPostRecvPacket) (*vibctypes.MsgPostRecvPacketResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	// check following:
@@ -141,13 +154,88 @@ func (k Keeper) WritePacketAck(goCtx context.Context, msg *vibctypes.MsgWritePac
 		return nil, sdkerrors.Wrap(err, "write acknowledgement failed")
 	}
 
-	return &vibctypes.MsgWritePacketAckResponse{}, nil
+	defer func() {
+		telemetry.IncrCounterWithLabels(
+			[]string{"tx", "msg", "ibc", channeltypes.EventTypeRecvPacket},
+			1,
+			[]metrics.Label{
+				telemetry.NewLabel(coretypes.LabelSourcePort, msg.Packet.SourcePort),
+				telemetry.NewLabel(coretypes.LabelSourceChannel, msg.Packet.SourceChannel),
+				telemetry.NewLabel(coretypes.LabelDestinationPort, msg.Packet.DestinationPort),
+				telemetry.NewLabel(coretypes.LabelDestinationChannel, msg.Packet.DestinationChannel),
+			},
+		)
+	}()
+
+	ctx.Logger().Info("post receive packet callback succeeded", "port-id", msg.Packet.SourcePort, "channel-id", msg.Packet.SourceChannel, "result", channeltypes.SUCCESS.String())
+
+	return &vibctypes.MsgPostRecvPacketResponse{}, nil
 }
 
-func (k Keeper) EmitAckPacketEvent(goCtx context.Context, msg *vibctypes.MsgEmitAckPacketEvent) (*vibctypes.MsgEmitAckPacketEventResponse, error) {
+func (k Keeper) PostAcknowledgementPacket(goCtx context.Context, msg *vibctypes.MsgPostAcknowledgementPacket) (*vibctypes.MsgPostAcknowledgementPacketResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	channelCap, ok := k.scopedKeeper.GetCapability(ctx, host.ChannelCapabilityPath(msg.Packet.DestinationPort, msg.Packet.DestinationChannel))
+	if !ok {
+		return nil, sdkerrors.Wrap(channeltypes.ErrChannelCapabilityNotFound, "module does not own channel capability")
+	}
+
+	// TODO: Verify packet acknowledgement on counterparty
+
+	// Delete packet commitment, since the packet has been acknowledged, the commitement is no longer necessary
+	if err := k.ChannelKeeper.PostAcknowledgePacket(ctx, channelCap, msg.Packet); err != nil {
+		return nil, sdkerrors.Wrap(err, "post acknowledgement error")
+	}
+
+	defer func() {
+		telemetry.IncrCounterWithLabels(
+			[]string{"tx", "msg", "ibc", channeltypes.EventTypeAcknowledgePacket},
+			1,
+			[]metrics.Label{
+				telemetry.NewLabel(coretypes.LabelSourcePort, msg.Packet.SourcePort),
+				telemetry.NewLabel(coretypes.LabelSourceChannel, msg.Packet.SourceChannel),
+				telemetry.NewLabel(coretypes.LabelDestinationPort, msg.Packet.DestinationPort),
+				telemetry.NewLabel(coretypes.LabelDestinationChannel, msg.Packet.DestinationChannel),
+			},
+		)
+	}()
+
+	ctx.Logger().Info("post acknowledgement succeeded", "port-id", msg.Packet.SourcePort, "channel-id", msg.Packet.SourceChannel, "result", channeltypes.SUCCESS.String())
+
 	return nil, nil
 }
 
-func (k Keeper) EmitTimeoutPacketEvent(goCtx context.Context, msg *vibctypes.MsgEmitTimeoutPacketEvent) (*vibctypes.MsgEmitTimeoutPacketEventResponse, error) {
+func (k Keeper) PostTimeoutPacket(goCtx context.Context, msg *vibctypes.MsgPostTimeoutPacket) (*vibctypes.MsgPostTimeoutPacketResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	// Lookup module by channel capability
+	_, cap, err := k.ChannelKeeper.LookupModuleByChannel(ctx, msg.Packet.SourcePort, msg.Packet.SourceChannel)
+	if err != nil {
+		ctx.Logger().Error("timeout failed", "port-id", msg.Packet.SourcePort, "channel-id", msg.Packet.SourceChannel, "error", sdkerrors.Wrap(err, "could not retrieve module from port-id"))
+		return nil, sdkerrors.Wrap(err, "could not retrieve module from port-id")
+	}
+
+	// TODO: Verify recv seq has not been incremented (ordered) or packet receipt absence (unordered).
+
+	// Delete packet commitment
+	if err = k.ChannelKeeper.TimeoutExecuted(ctx, cap, msg.Packet); err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		telemetry.IncrCounterWithLabels(
+			[]string{"ibc", "timeout", "packet"},
+			1,
+			[]metrics.Label{
+				telemetry.NewLabel(coretypes.LabelSourcePort, msg.Packet.SourcePort),
+				telemetry.NewLabel(coretypes.LabelSourceChannel, msg.Packet.SourceChannel),
+				telemetry.NewLabel(coretypes.LabelDestinationPort, msg.Packet.DestinationPort),
+				telemetry.NewLabel(coretypes.LabelDestinationChannel, msg.Packet.DestinationChannel),
+				telemetry.NewLabel(coretypes.LabelTimeoutType, "height"),
+			},
+		)
+	}()
+
+	ctx.Logger().Info("post timeout packet callback succeeded", "port-id", msg.Packet.SourcePort, "channel-id", msg.Packet.SourceChannel, "result", channeltypes.SUCCESS.String())
 	return nil, nil
 }

@@ -348,13 +348,13 @@ func (k Keeper) WriteAcknowledgement(
 	return nil
 }
 
-// AcknowledgePacket is called by a module to process the acknowledgement of a
+// PreAcknowledgePacket is called by a module to process the pre acknowledgement of a
 // packet previously sent by the calling module on a channel to a counterparty
 // module on the counterparty chain. Its intended usage is within the ante
 // handler. AcknowledgePacket will clean up the packet commitment,
 // which is no longer necessary since the packet has been received and acted upon.
 // It will also increment NextSequenceAck in case of ORDERED channels.
-func (k Keeper) AcknowledgePacket(
+func (k Keeper) PreAcknowledgePacket(
 	ctx sdk.Context,
 	chanCap *capabilitytypes.Capability,
 	packet exported.PacketI,
@@ -431,11 +431,33 @@ func (k Keeper) AcknowledgePacket(
 		return sdkerrors.Wrapf(types.ErrInvalidPacket, "commitment bytes are not equal: got (%v), expected (%v)", packetCommitment, commitment)
 	}
 
-	if err := k.connectionKeeper.VerifyPacketAcknowledgement(
+	return k.connectionKeeper.VerifyPacketAcknowledgement(
 		ctx, connectionEnd, proofHeight, proof, packet.GetDestPort(), packet.GetDestChannel(),
 		packet.GetSequence(), acknowledgement,
-	); err != nil {
-		return err
+	)
+}
+
+// PostAcknowledgePacket completes the packet acknowledgement flow.
+func (k Keeper) PostAcknowledgePacket(
+	ctx sdk.Context,
+	chanCap *capabilitytypes.Capability,
+	packet exported.PacketI,
+) error {
+	// Authenticate capability to ensure caller has authority to receive packet on this channel
+	capName := host.ChannelCapabilityPath(packet.GetDestPort(), packet.GetDestChannel())
+	if !k.scopedKeeper.AuthenticateCapability(ctx, chanCap, capName) {
+		return sdkerrors.Wrapf(
+			types.ErrInvalidChannelCapability,
+			"channel capability failed authentication for capability name %s", capName,
+		)
+	}
+
+	channel, found := k.GetChannel(ctx, packet.GetSourcePort(), packet.GetSourceChannel())
+	if !found {
+		return sdkerrors.Wrapf(
+			types.ErrChannelNotFound,
+			"port ID (%s) channel ID (%s)", packet.GetSourcePort(), packet.GetSourceChannel(),
+		)
 	}
 
 	// assert packets acknowledged in order

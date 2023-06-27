@@ -60,31 +60,34 @@ service VirtualIBCSidecar {
   // vIBC differs from IBC in that it allows the chain side to actively initiate the channel handshake.
   // ChannelOpenInitActive defines a rpc handler method for MsgChannelOpenInitActive originating from the chain side.
   // rpc ChannelOpenInitActive(MsgChannelOpenInitActive) returns (MsgChannelOpenInitActiveResponse);
+  //
+  // NB: All `Post` method handlers complete the flow of the original RPC method flow.
+  //     Not renaming any of the original method handlers to have a `Pre` prefix for compat w/ existing relayers.
 
-  // WriteOpenInitOrTryChan defines a rpc handler method for MsgWriteOpenInitOrTryChan.
-  rpc WriteOpenInitOrTryChan(MsgWriteOpenInitOrTryChan) returns (MsgWriteOpenInitOrTryChanResponse);
+  // PostChannelOpenInitOrTry defines a rpc handler method for MsgPostChannelOpenInitOrTry.
+  rpc PostChannelOpenInitOrTry(MsgPostChannelOpenInitOrTry) returns (MsgPostChannelOpenInitOrTryResponse);
 
-  // WriteOpenAckChan defines a rpc handler method for MsgWriteOpenAckChan.
-  rpc WriteOpenAckChan(MsgWriteOpenAckChan) returns (MsgWriteOpenAckChanResponse);
+  // PostChannelOpenAck defines a rpc handler method for MsgPostChannelOpenAck.
+  rpc PostChannelOpenAck(MsgPostChannelOpenAck) returns (MsgPostChannelOpenAckResponse);
 
-  // WriteOpenConfirmChan defines a rpc handler method for MsgWriteOpenConfirmChan.
-  rpc WriteOpenConfirmChan(MsgWriteOpenConfirmChan) returns (MsgWriteOpenConfirmChanResponse);
+  // PostChannelOpenConfirm defines a rpc handler method for MsgPostChannelOpenConfirm.
+  rpc PostChannelOpenConfirm(MsgPostChannelOpenConfirm) returns (MsgPostChannelOpenConfirmResponse);
 
   // The chain is also active in the initiation of the packet lifecycle.
   // SendPacket defines a rpc handler method for MsgSendPacket.
   rpc SendPacket(MsgSendPacket) returns (MsgSendPacketResponse);
 
-  // WritePacketAck defines a rpc handler method for MsgWritePacketAck.
+  // PostRecvPacket defines a rpc handler method for MsgPostRecvPacket.
   // This completes the RecvPacket flow.
-  rpc WritePacketAck(MsgWritePacketAck) returns (MsgWritePacketAckResponse);
+  rpc PostRecvPacket(MsgPostRecvPacket) returns (MsgPostRecvPacketResponse);
 
-  // EmitAckPacketEvent defines a rpc handler method for MsgEmitAckPacketEvent.
+  // PostAcknowledgementPacket defines a rpc handler method for MsgPostAcknowledgementPacket.
   // This completes the Acknowledgement flow.
-  rpc EmitAckPacketEvent(MsgEmitAckPacketEvent) returns (MsgEmitAckPacketEventResponse);
+  rpc PostAcknowledgementPacket(MsgPostAcknowledgementPacket) returns (MsgPostAcknowledgementPacketResponse);
 
-  // EmitTimeoutPacketEvent defines a rpc handler method for MsgEmitTimeoutPacketEvent.
+  // PostTimeoutPacket defines a rpc handler method for MsgPostTimeoutPacket.
   // This completes the Acknowledgement flow.
-  rpc EmitTimeoutPacketEvent(MsgEmitTimeoutPacketEvent) returns (MsgEmitTimeoutPacketEventResponse);
+  rpc PostTimeoutPacket(MsgPostTimeoutPacket) returns (MsgPostTimeoutPacketResponse);
 }
 
 // MsgSendPacket defines an sdk.Msg to send a packet. 
@@ -184,9 +187,9 @@ message MsgOnChanOpenConfirm {
 // MsgOnChanOpenConfirmResponse defines the Msg/OnChanOpenConfirm response type.
 message MsgOnChanOpenConfirmResponse {}
 
-// MsgWriteOpenInitOrTryChan defines an sdk.Msg for the completion of INIT/TRY channel.
+// MsgPostChannelOpenInitOrTry defines an sdk.Msg for the completion of INIT/TRY channel.
 // It originates from the vIBC chain side.
-message MsgWriteOpenInitOrTryChan {
+message MsgPostChannelOpenInitOrTry {
   option (gogoproto.equal)           = false;
   option (gogoproto.goproto_getters) = false;
 
@@ -195,12 +198,12 @@ message MsgWriteOpenInitOrTryChan {
   ibc.core.channel.v1.Channel channel    = 3;
 }
 
-// MsgWriteOpenInitOrTryChanResponse defines the Msg/WriteOpenInitOrTryChan response type.
-message MsgWriteOpenInitOrTryChanResponse {}
+// MsgPostChannelOpenInitOrTryResponse defines the Msg/PostChannelOpenInitOrTry response type.
+message MsgPostChannelOpenInitOrTryResponse {}
 
-// MsgWriteOpenAckChan defines an sdk.Msg for the completion of ACK channel.
+// MsgPostChannelOpenAck defines an sdk.Msg for the completion of ACK channel.
 // It originates from the vIBC chain side.
-message MsgWriteOpenAckChan {
+message MsgPostChannelOpenAck {
   option (gogoproto.equal)           = false;
   option (gogoproto.goproto_getters) = false;
 
@@ -210,12 +213,12 @@ message MsgWriteOpenAckChan {
   string counterparty_version    = 4 [(gogoproto.moretags) = "yaml:\"counterparty_version\""];
 }
 
-// MsgWriteOpenAckChanResponse defines the Msg/WriteOpenAckChan response type.
-message MsgWriteOpenAckChanResponse {}
+// MsgPostChannelOpenAckResponse defines the Msg/PostChannelOpenAck response type.
+message MsgPostChannelOpenAckResponse {}
 
-// MsgWriteOpenConfirmChan defines an sdk.Msg for the completion of CONFIRM channel.
+// MsgPostChannelOpenConfirm defines an sdk.Msg for the completion of CONFIRM channel.
 // It originates from the vIBC chain side.
-message MsgWriteOpenConfirmChan {
+message MsgPostChannelOpenConfirm {
   option (gogoproto.equal)           = false;
   option (gogoproto.goproto_getters) = false;
 
@@ -223,8 +226,8 @@ message MsgWriteOpenConfirmChan {
   string channel_id = 2 [(gogoproto.moretags) = "yaml:\"channel_id\""];
 }
 
-// MsgWriteOpenConfirmChanResponse defines the Msg/WriteOpenConfirmChan response type.
-message MsgWriteOpenConfirmChanResponse {}
+// MsgPostChannelOpenConfirmResponse defines the Msg/PostChannelOpenConfirm response type.
+message MsgPostChannelOpenConfirmResponse {}
 
 // MsgOnRecvPacket defines an sdk.Msg to for a packet receipt.
 // It originates from the vIBC sidecar side.
@@ -266,9 +269,9 @@ message MsgOnAcknowledgementPacket {
 // MsgOnAcknowledgementPacketResponse defines the Msg/OnAcknowledgementPacket response type.
 message MsgOnAcknowledgementPacketResponse {}
 
-// MsgWritePacketAck defines an sdk.Msg to for writing a packet acknowledgement.
+// MsgPostRecvPacket defines an sdk.Msg to for completing the recv packet flow.
 // It originates from the vIBC chain side.
-message MsgWritePacketAck {
+message MsgPostRecvPacket {
   option (gogoproto.equal)           = false;
   option (gogoproto.goproto_getters) = false;
 
@@ -276,26 +279,26 @@ message MsgWritePacketAck {
   ibc.core.channel.v1.Acknowledgement acknowledgement = 2;
 }
 
-message MsgWritePacketAckResponse {}
+message MsgPostRecvPacketResponse {}
 
-// MsgEmitAckPacketEvent defines an sdk.Msg to for emitting a packet acknowledgement event.
+// MsgPostAcknowledgementPacket defines an sdk.Msg for completing the acknowledgement flow.
 // It originates from the vIBC chain side.
-message MsgEmitAckPacketEvent {
+message MsgPostAcknowledgementPacket {
   option (gogoproto.equal)           = false;
   option (gogoproto.goproto_getters) = false;
 
   ibc.core.channel.v1.Packet          packet          = 1 [(gogoproto.nullable) = false];
 }
 
-message MsgEmitAckPacketEventResponse {}
+message MsgPostAcknowledgementPacketResponse {}
 
-// MsgEmitTimeoutPacketEvent defines an sdk.Msg to for emitting a packet timeout event.
+// MsgPostTimeoutPacket defines an sdk.Msg for completing the timeout flow.
 // It originates from the vIBC chain side.
-message MsgEmitTimeoutPacketEvent {
+message MsgPostTimeoutPacket {
   option (gogoproto.equal)           = false;
   option (gogoproto.goproto_getters) = false;
 
   ibc.core.channel.v1.Packet          packet          = 1 [(gogoproto.nullable) = false];
 }
 
-message MsgEmitTimeoutPacketEventResponse {}
+message MsgPostTimeoutPacketResponse {}
