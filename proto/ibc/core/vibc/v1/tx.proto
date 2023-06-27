@@ -54,8 +54,8 @@ service VirtualIBCChain {
   rpc OnTimeoutPacket(MsgOnTimeoutPacket) returns (MsgOnTimeoutPacketResponse);
 }
 
-// VirtualIBCSidecar defines the vIBC Sidecar service. This what the networking side of the vIBC protocol implements.
-service VirtualIBCSidecar {
+// VirtualIBC defines the vIBC service. This what the networking (IBC) side of the vIBC protocol implements.
+service VirtualIBC {
   // In the default case, the chain side is passive in the channel handshake process.
   // vIBC differs from IBC in that it allows the chain side to actively initiate the channel handshake.
   // ChannelOpenInitActive defines a rpc handler method for MsgChannelOpenInitActive originating from the chain side.

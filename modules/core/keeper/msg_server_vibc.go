@@ -14,7 +14,7 @@ import (
 	vibctypes "github.com/cosmos/ibc-go/v7/modules/core/vibc/types"
 )
 
-var _ vibctypes.VirtualIBCSidecarServer = Keeper{}
+var _ vibctypes.VirtualIBCServer = Keeper{}
 
 func (k Keeper) PostChannelOpenInitOrTry(goCtx context.Context, msg *vibctypes.MsgPostChannelOpenInitOrTry) (*vibctypes.MsgPostChannelOpenInitOrTryResponse, error) {
 	ctx := sdk.UnwrapSDKContext(goCtx)
